@@ -1,0 +1,40 @@
+name: Auto Absen
+
+on:
+  schedule:
+    # Absen masuk: Senin-Jumat 06:10-07:20 WITA
+    # UTC = WITA - 8 jam -> 22:10-23:20 UTC
+    # Kita buat 3 kali dalam rentang waktu
+    - cron: "10 22 * * 1-5" # Senin-Jumat 22:10 UTC (06:10 WITA)
+    - cron: "30 22 * * 1-5" # Senin-Jumat 22:30 UTC (06:30 WITA)
+    - cron: "50 22 * * 1-5" # Senin-Jumat 22:50 UTC (06:50 WITA)
+
+    # Absen pulang Senin-Kamis: 16:00-17:00 WITA (08:00-09:00 UTC)
+    - cron: "0 8 * * 1-4" # Senin-Kamis 08:00 UTC (16:00 WITA)
+    - cron: "30 8 * * 1-4" # Senin-Kamis 08:30 UTC (16:30 WITA)
+
+    # Absen pulang Jumat: 16:30-17:10 WITA (08:30-09:10 UTC)
+    - cron: "30 8 * * 5" # Jumat 08:30 UTC (16:30 WITA)
+    - cron: "50 8 * * 5" # Jumat 08:50 UTC (16:50 WITA)
+
+jobs:
+  absen:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.9"
+
+      - name: Install dependencies
+        run: pip install requests pytz
+
+      - name: Run absen script
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python absen_github.py
