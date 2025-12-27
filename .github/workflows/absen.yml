@@ -1,10 +1,23 @@
 name: Auto Absen
 
 on:
+  # 1. Ini yang bikin tombol "Run workflow" muncul
+  workflow_dispatch:
+    inputs:
+      jenis_absen:
+        description: "Jenis absen (masuk/pulang/auto)"
+        required: false
+        default: "auto"
+        type: choice
+        options:
+          - auto
+          - masuk
+          - pulang
+
+  # 2. Schedule tetap ada untuk otomatis
   schedule:
     # Absen masuk: Senin-Jumat 06:10-07:20 WITA
     # UTC = WITA - 8 jam -> 22:10-23:20 UTC
-    # Kita buat 3 kali dalam rentang waktu
     - cron: "10 22 * * 1-5" # Senin-Jumat 22:10 UTC (06:10 WITA)
     - cron: "30 22 * * 1-5" # Senin-Jumat 22:30 UTC (06:30 WITA)
     - cron: "50 22 * * 1-5" # Senin-Jumat 22:50 UTC (06:50 WITA)
@@ -37,4 +50,5 @@ jobs:
         env:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          JENIS_ABSEN: ${{ github.event.inputs.jenis_absen }}
         run: python absen_github.py
