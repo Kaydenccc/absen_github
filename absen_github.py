@@ -118,7 +118,7 @@ def main():
 
 
     # ================= RANDOM DELAY =================
-    delay = random.randint(30, 180)
+    delay = random.randint(30, 300)
     print(f"⏳ Delay {delay} detik agar natural...")
     time.sleep(delay)
 
