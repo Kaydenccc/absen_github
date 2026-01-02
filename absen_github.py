@@ -62,6 +62,16 @@ def sudah_absen(jenis, now):
     file_log = f".absen_log/{tanggal}_{jenis}.log"
     return os.path.exists(file_log), file_log
 
+def cek_dan_buat_log(jenis, now):
+    tanggal = now.strftime("%Y-%m-%d")
+    os.makedirs(".absen_log", exist_ok=True)
+    path = f".absen_log/{tanggal}_{jenis}.log"
+
+    if os.path.exists(path):
+        return False, path   # sudah absen
+
+    return True, path
+
 
 def main():
     # ================= KONFIGURASI =================
@@ -90,10 +100,11 @@ def main():
         jenis = jenis_input
 
     # ================= PROTEKSI 1 HARI 1x =================
-    sudah, file_log = sudah_absen(jenis, now)
-    if sudah:
-        print(f"⛔ Absen {jenis} hari ini sudah dilakukan")
-        return
+    boleh, file_log = cek_dan_buat_log(jenis, now)
+    if not boleh:
+       print(f"⛔ Absen {jenis} hari ini sudah dilakukan")
+       return
+
 
 
 
