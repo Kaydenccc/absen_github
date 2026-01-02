@@ -72,6 +72,10 @@ def cek_dan_buat_log(jenis, now):
 
     return True, path
 
+def mode_off_manual():
+    mode = os.getenv("ABSEN_MODE", "ON").upper()
+    return mode == "OFF"
+
 
 def main():
     # ================= KONFIGURASI =================
