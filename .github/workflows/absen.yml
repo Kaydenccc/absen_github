@@ -46,6 +46,14 @@ jobs:
       - name: Install dependencies
         run: pip install requests pytz
 
+      - name: Restore absen cache
+        uses: actions/cache@v3
+        with:
+          path: .absen_log
+          key: absen-log-${{ github.run_id }}
+          restore-keys: |
+            absen-log-
+
       - name: Run absen script
         env:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
