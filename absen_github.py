@@ -78,6 +78,11 @@ def mode_off_manual():
 
 
 def main():
+    # ================= MODE OFF MANUAL =================
+    if mode_off_manual():
+        print("⛔ MODE OFF MANUAL AKTIF - absensi dinonaktifkan")
+        return
+
     # ================= KONFIGURASI =================
     NIP = "199909262025051003"
     LAT_KANTOR = -3.2795460218952925
