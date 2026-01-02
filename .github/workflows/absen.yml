@@ -57,5 +57,6 @@ jobs:
         env:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          ABSEN_MODE: ${{ secrets.ABSEN_MODE }}
           JENIS_ABSEN: ${{ github.event.inputs.jenis_absen }}
         run: python absen_github.py
