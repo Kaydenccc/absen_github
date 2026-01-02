@@ -17,18 +17,17 @@ on:
   # 2. Schedule tetap ada untuk otomatis
   schedule:
     # Absen masuk: Senin-Jumat 06:10-07:20 WITA
-    # UTC = WITA - 8 jam -> 22:10-23:20 UTC
-    - cron: "10 22 * * 1-5" # Senin-Jumat 22:10 UTC (06:10 WITA)
-    - cron: "30 22 * * 1-5" # Senin-Jumat 22:30 UTC (06:30 WITA)
-    - cron: "50 22 * * 1-5" # Senin-Jumat 22:50 UTC (06:50 WITA)
+    - cron: "0-50/10 22 * * 1-5"  # 06:00–06:50 WITA
+    - cron: "0-10/10 23 * * 1-5"  # 07:00–07:10 WITA
+
 
     # Absen pulang Senin-Kamis: 16:00-17:00 WITA (08:00-09:00 UTC)
-    - cron: "0 8 * * 1-4" # Senin-Kamis 08:00 UTC (16:00 WITA)
-    - cron: "30 8 * * 1-4" # Senin-Kamis 08:30 UTC (16:30 WITA)
+    # Senin–Kamis
+    - cron: "*/10 8-9 * * 1-4"
 
-    # Absen pulang Jumat: 16:30-17:10 WITA (08:30-09:10 UTC)
-    - cron: "30 8 * * 5" # Jumat 08:30 UTC (16:30 WITA)
-    - cron: "50 8 * * 5" # Jumat 08:50 UTC (16:50 WITA)
+    # Jumat
+    - cron: "*/10 8-9 * * 5"
+
 
 jobs:
   absen:
