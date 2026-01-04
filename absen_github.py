@@ -139,21 +139,21 @@ def main():
 
     # Inisialisasi hari ini
     if today not in cache:
-     cache[today] = {
-        "masuk": False,
-        "pulang": False
-     }
+       cache[today] = {
+          "masuk": False,
+          "pulang": False
+       }
 
    # ===== PROTEKSI 1 HARI 1X =====
    if cache[today].get(jenis):
-    print(f"⛔ Absen {jenis} hari ini sudah dilakukan")
-    send_telegram(
-        f"⛔ <b>ABSEN DIBATALKAN</b>\n"
-        f"Jenis: {jenis.upper()}\n"
-        f"Tanggal: {today}\n"
-        f"Alasan: Sudah absen sebelumnya"
-    )
-    return
+       print(f"⛔ Absen {jenis} hari ini sudah dilakukan")
+       send_telegram(
+           f"⛔ <b>ABSEN DIBATALKAN</b>\n"
+           f"Jenis: {jenis.upper()}\n"
+           f"Tanggal: {today}\n"
+           f"Alasan: Sudah absen sebelumnya"
+       )
+       return
 
       
     # ================= RANDOM DELAY =================
