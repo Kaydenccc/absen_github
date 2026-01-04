@@ -5,6 +5,23 @@ import math
 import time
 import pytz
 from datetime import time as dt_time
+import json
+from pathlib import Path
+
+CACHE_FILE = Path(".absen_cache.json")
+
+
+def load_cache():
+    if not CACHE_FILE.exists():
+        return {}
+    with open(CACHE_FILE, "r") as f:
+        return json.load(f)
+
+
+def save_cache(data):
+    with open(CACHE_FILE, "w") as f:
+        json.dump(data, f, indent=2)
+
 
 def tentukan_jenis_absen(now):
     """
@@ -117,14 +134,28 @@ def main():
         jenis = jenis_input
 
     # ================= PROTEKSI 1 HARI 1x =================
-    boleh, file_log = cek_dan_buat_log(jenis, now)
-    if not boleh:
-       print(f"⛔ Absen {jenis} hari ini sudah dilakukan")
-       return
+    today = now.strftime("%Y-%m-%d")
+    cache = load_cache()
 
+    # Inisialisasi hari ini
+    if today not in cache:
+     cache[today] = {
+        "masuk": False,
+        "pulang": False
+     }
 
+   # ===== PROTEKSI 1 HARI 1X =====
+   if cache[today].get(jenis):
+    print(f"⛔ Absen {jenis} hari ini sudah dilakukan")
+    send_telegram(
+        f"⛔ <b>ABSEN DIBATALKAN</b>\n"
+        f"Jenis: {jenis.upper()}\n"
+        f"Tanggal: {today}\n"
+        f"Alasan: Sudah absen sebelumnya"
+    )
+    return
 
-
+      
     # ================= RANDOM DELAY =================
     delay = random.randint(30, 300)
     print(f"⏳ Delay {delay} detik agar natural...")
