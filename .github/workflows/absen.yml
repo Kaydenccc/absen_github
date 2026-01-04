@@ -15,18 +15,19 @@ on:
           - pulang
 
   # 2. Schedule tetap ada untuk otomatis
+  # ================== AUTO ABSEN SCHEDULE ==================
   schedule:
-    # Absen masuk: Senin-Jumat 06:10-07:20 WITA
-    - cron: "0-50/10 22 * * 1-5"  # 06:00–06:50 WITA
-    - cron: "0-10/10 23 * * 1-5"  # 07:00–07:10 WITA
+  # ===== PAGI (Masuk) =====
+  # 06:00–07:15 WITA → 22:00–23:15 UTC
+   - cron: "0,10,20,30,40,50 22 * * *"
+   - cron: "0,10 23 * * *"
+
+  # ===== SORE (Pulang) =====
+  # 16:00–17:30 WITA → 08:00–09:30 UTC
+   - cron: "0,10,20,30,40,50 8 * * *"
+   - cron: "0,10,20,30 9 * * *"
 
 
-    # Absen pulang Senin-Kamis: 16:00-17:00 WITA (08:00-09:00 UTC)
-    # Senin–Kamis
-    - cron: "*/10 8-9 * * 1-4"
-
-    # Jumat
-    - cron: "*/10 8-9 * * 5"
 
 
 jobs:
