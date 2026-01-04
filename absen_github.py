@@ -3,8 +3,45 @@ import requests
 import random
 import math
 import time
-from datetime import datetime
 import pytz
+from datetime import time as dt_time
+
+def tentukan_jenis_absen(now):
+    """
+    Menentukan jenis absen berdasarkan waktu WITA
+    Return:
+      - "masuk"
+      - "pulang"
+      - None (bukan waktu absen / hari libur)
+    """
+
+    hari = now.weekday()  # 0=Senin ... 6=Minggu
+    jam = now.time()
+
+    # ================= PROTEKSI HARI =================
+    # Sabtu (5) & Minggu (6) langsung ditolak
+    if hari >= 5:
+        return None
+
+    # ================= ABSEN MASUK =================
+    # Senin–Jumat | 06:00 – 07:15
+    if 0 <= hari <= 4:
+        if dt_time(6, 0) <= jam <= dt_time(7, 15):
+            return "masuk"
+
+    # ================= ABSEN PULANG =================
+    # Senin–Kamis | 16:00 – 17:00
+    if 0 <= hari <= 3:
+        if dt_time(16, 0) <= jam <= dt_time(17, 0):
+            return "pulang"
+
+    # Jumat | 16:30 – 17:30
+    if hari == 4:
+        if dt_time(16, 30) <= jam <= dt_time(17, 30):
+            return "pulang"
+
+    # ================= DI LUAR JAM =================
+    return None
 
 
 def send_telegram(message):
@@ -26,35 +63,6 @@ def send_telegram(message):
     except Exception as e:
         print(f"❌ Telegram error: {e}")
 
-
-def tentukan_jenis_absen(now):
-    """
-    Menentukan jenis absen berdasarkan waktu WITA
-    """
-    hari = now.weekday()   # 0=Senin ... 4=Jumat
-    jam = now.hour
-    menit = now.minute
-
-    # === ABSEN MASUK (Senin–Jumat 06:00–07:15) ===
-    if 0 <= hari <= 4:
-        if jam == 6:
-            return "masuk"
-        if jam == 7 and menit <= 15:
-            return "masuk"
-
-    # === ABSEN PULANG SENIN–KAMIS (16:00–17:00) ===
-    if 0 <= hari <= 3:
-        if jam == 16:
-            return "pulang"
-        if jam == 17 and menit == 0:
-            return "pulang"
-
-    # === ABSEN PULANG JUMAT (16:30–17:30) ===
-    if hari == 4:
-        if (jam == 16 and menit >= 30) or (jam == 17 and menit <= 30):
-            return "pulang"
-
-    return None
 
 def sudah_absen(jenis, now):
     tanggal = now.strftime("%Y-%m-%d")
