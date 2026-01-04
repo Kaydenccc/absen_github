@@ -53,6 +53,13 @@ jobs:
           key: absen-log-${{ github.run_id }}
           restore-keys: |
             absen-log-
+      - name: Commit absen cache
+        run: |
+            git config user.name "github-actions"
+            git config user.email "github-actions@github.com"
+            git add .absen_cache.json
+            git commit -m "update absen cache" || echo "no changes"
+            git push
 
       - name: Run absen script
         env:
