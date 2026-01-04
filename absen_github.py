@@ -192,6 +192,9 @@ def main():
         if sukses:
             with open(file_log, "w") as f:
                 f.write(f"{now.isoformat()} | {lokasi}\n")
+            # Tandai berhasil di cache
+            cache[today][jenis] = True
+            save_cache(cache)
 
             send_telegram(
                 f"✅ <b>ABSEN {jenis.upper()} BERHASIL</b>\n"
