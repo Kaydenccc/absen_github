@@ -5,6 +5,7 @@ import math
 import time
 import pytz
 import json
+import shutil
 from pathlib import Path
 from datetime import datetime, time as dt_time
 
@@ -13,15 +14,64 @@ CACHE_FILE = Path(".absen_cache.json")
 
 
 def load_cache():
-    if not CACHE_FILE.exists():
+    if not os.path.exists("cache.json"):
         return {}
 
     try:
-        with open(CACHE_FILE, "r") as f:
+        with open("cache.json", "r") as f:
             return json.load(f)
-    except (json.JSONDecodeError, ValueError):
-        print("⚠️ Cache rusak / kosong, reset cache")
-        return {}
+
+    except json.JSONDecodeError:
+        print("⚠️ CACHE RUSAK! File tidak bisa dibaca.")
+        return {
+            "__CORRUPTED__": True
+        }
+
+
+
+def save_cache(cache):
+    if os.path.exists("cache.json"):
+        shutil.copy("cache.json", "cache_backup.json")
+
+    with open("cache.json", "w") as f:
+        json.dump(cache, f, indent=2)
+
+
+
+def tentukan_jenis_absen(now):
+    """
+    Menentukan jenis absen berdasarkan waktu WITA
+    Return:
+      - "masuk"
+      - "pulang"
+      - None (bukan waktu absen / hari libur)
+    """
+
+    hari = now.weekday()  # 0=Senin ... 6=Minggu
+    jam = now.time()
+
+    # ================= PROTEKSI HARI =================
+    # Sabtu (5) & Minggu (6) langsung ditolak
+    if hari >= 5:
+        return None
+
+    # ================= ABSEN MASUK =================
+    # Senin–Jumat | 06:00 – 07:15
+    if 0 <= hari <= 4:
+        if dt_time(6, 0) <= jam <= dt_time(7, 15):
+            return "masuk"
+
+    # ================= ABSEN PULANG =================
+    # Senin–Kamis | 16:00 – 17:00
+    if 0 <= hari <= 3:
+        if dt_time(16, 0) <= jam <= dt_time(17, 0):
+            return "pulang"
+
+    # Jumat | 16:30 – 17:30
+    if hari == 4:
+        if dt_time(16, 30) <= jam <= dt_time(17, 30):
+            return "pulang"
+
 
 
 def save_cache(data):
@@ -142,6 +192,14 @@ def main():
     # ================= PROTEKSI 1 HARI 1x =================
     today = now.strftime("%Y-%m-%d")
     cache = load_cache()
+
+    if "__CORRUPTED__" in cache:
+       send_telegram(
+          "⚠️ <b>CACHE ABSEN RUSAK</b>\n"
+          "Workflow dihentikan demi keamanan data."
+       )
+       return
+
 
     # Inisialisasi hari ini
     if today not in cache:
