@@ -11,14 +11,15 @@ from datetime import datetime, time as dt_time
 
 
 CACHE_FILE = Path(".absen_cache.json")
+BACKUP_FILE = Path(".absen_cache.backup.json")
 
 
 def load_cache():
-    if not os.path.exists("cache.json"):
+    if not CACHE_FILE.exists():
         return {}
 
     try:
-        with open("cache.json", "r") as f:
+        with open(CACHE_FILE, "r") as f:
             return json.load(f)
 
     except json.JSONDecodeError:
@@ -28,13 +29,13 @@ def load_cache():
         }
 
 
-
 def save_cache(cache):
-    if os.path.exists("cache.json"):
-        shutil.copy("cache.json", "cache_backup.json")
+    if CACHE_FILE.exists():
+        shutil.copy(CACHE_FILE, BACKUP_FILE)
 
-    with open("cache.json", "w") as f:
+    with open(CACHE_FILE, "w") as f:
         json.dump(cache, f, indent=2)
+
 
 
 
