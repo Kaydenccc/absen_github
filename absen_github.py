@@ -15,8 +15,13 @@ CACHE_FILE = Path(".absen_cache.json")
 def load_cache():
     if not CACHE_FILE.exists():
         return {}
-    with open(CACHE_FILE, "r") as f:
-        return json.load(f)
+
+    try:
+        with open(CACHE_FILE, "r") as f:
+            return json.load(f)
+    except (json.JSONDecodeError, ValueError):
+        print("⚠️ Cache rusak / kosong, reset cache")
+        return {}
 
 
 def save_cache(data):
