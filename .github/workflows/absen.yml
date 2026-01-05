@@ -59,8 +59,13 @@ jobs:
             git config user.email "github-actions@github.com"
 
             git add .absen_cache.json
-            git commit -m "update absen cache" || echo "no changes"
 
+            if git diff --cached --quiet; then
+              echo "⏭️ Tidak ada perubahan cache, skip push"
+              exit 0
+            fi
+
+            git commit -m "update absen cache"
             git pull --rebase origin main
             git push origin main
 
