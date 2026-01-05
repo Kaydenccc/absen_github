@@ -57,9 +57,12 @@ jobs:
         run: |
             git config user.name "github-actions"
             git config user.email "github-actions@github.com"
+
             git add .absen_cache.json
             git commit -m "update absen cache" || echo "no changes"
-            git push
+
+            git pull --rebase origin main
+            git push origin main
 
       - name: Run absen script
         env:
