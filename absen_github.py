@@ -4,9 +4,10 @@ import random
 import math
 import time
 import pytz
-from datetime import time as dt_time
 import json
 from pathlib import Path
+from datetime import datetime, time as dt_time
+
 
 CACHE_FILE = Path(".absen_cache.json")
 
