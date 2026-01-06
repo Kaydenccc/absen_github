@@ -9,28 +9,56 @@ import shutil
 from pathlib import Path
 from datetime import datetime, time as dt_time
 
-# ================= FILE CACHE =================
+
 CACHE_FILE = Path(".absen_cache.json")
 BACKUP_FILE = Path(".absen_cache.backup.json")
 
-# ================= CACHE =================
+# ================= LOAD CACHE =================
 def load_cache():
+    # Jika file belum ada → buat cache kosong
     if not CACHE_FILE.exists():
         return {}
 
+    # Jika file ada tapi kosong
+    if CACHE_FILE.stat().st_size == 0:
+        print("⚠️ CACHE KOSONG, reset")
+        return {}
+
     try:
-        with open(CACHE_FILE, "r") as f:
-            return json.load(f)
-    except json.JSONDecodeError:
-        print("⚠️ CACHE RUSAK")
+        with CACHE_FILE.open("r", encoding="utf-8") as f:
+            data = json.load(f)
+
+            # Validasi dasar
+            if not isinstance(data, dict):
+                raise ValueError("Format cache tidak valid")
+
+            return data
+
+    except (json.JSONDecodeError, ValueError) as e:
+        print(f"⚠️ CACHE RUSAK: {e}")
+
+        # Backup file rusak (jika belum pernah)
+        if CACHE_FILE.exists():
+            shutil.copy(CACHE_FILE, BACKUP_FILE)
+
         return {"__CORRUPTED__": True}
 
-def save_cache(cache):
+
+# ================= SAVE CACHE =================
+def save_cache(cache: dict):
+
+    # Backup versi lama
     if CACHE_FILE.exists():
         shutil.copy(CACHE_FILE, BACKUP_FILE)
 
-    with open(CACHE_FILE, "w") as f:
-        json.dump(cache, f, indent=2)
+    # Simpan cache baru (atomic write)
+    temp_file = CACHE_FILE.with_suffix(".tmp")
+
+    with temp_file.open("w", encoding="utf-8") as f:
+        json.dump(cache, f, indent=2, ensure_ascii=False)
+
+    temp_file.replace(CACHE_FILE)
+
 
 # ================= TELEGRAM =================
 def send_telegram(message):
