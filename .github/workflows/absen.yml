@@ -58,11 +58,12 @@ jobs:
             git config user.name "github-actions"
             git config user.email "github-actions@github.com"
 
-            if [ ! -f .absen_cache.json ]; then
-               echo "{}" > .absen_cache.json
+            if [ -f .absen_cache.json ]; then
+                 git add .absen_cach
+            else
+                 echo "Cache belum ada, skip commit"
+                 exit 0
             fi
-            
-            git add .absen_cache.json
 
             if git diff --cached --quiet; then
               echo "⏭️ Tidak ada perubahan cache, skip push"
