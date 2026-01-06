@@ -133,12 +133,13 @@ def main():
     print("=" * 50)
 
     # Tentukan jenis
-    jenis_input = os.getenv("JENIS_ABSEN", "auto")
-    jenis = tentukan_jenis_absen(now) if jenis_input == "auto" else jenis_input
+    # Tentukan jenis absen BERDASARKAN JAM
+    jenis = tentukan_jenis_absen(now)
 
     if jenis not in ("masuk", "pulang"):
         print("⏸️ BUKAN WAKTU ABSEN")
         return
+
 
     # Cache
     cache = load_cache()
