@@ -1,7 +1,6 @@
 name: Auto Absen
 
 on:
-  # 1. Ini yang bikin tombol "Run workflow" muncul
   workflow_dispatch:
     inputs:
       jenis_absen:
@@ -14,21 +13,14 @@ on:
           - masuk
           - pulang
 
-  # 2. Schedule tetap ada untuk otomatis
-  # ================== AUTO ABSEN SCHEDULE ==================
   schedule:
-  # ===== PAGI (Masuk) =====
-  # 06:00–07:15 WITA → 22:00–23:15 UTC
-   - cron: "0,10,20,30,40,50 22 * * *"
-   - cron: "0,10 23 * * *"
+    # PAGI (Masuk)
+    - cron: "0,10,20,30,40,50 22 * * *"
+    - cron: "0,10 23 * * *"
 
-  # ===== SORE (Pulang) =====
-  # 16:00–17:30 WITA → 08:00–09:30 UTC
-   - cron: "0,10,20,30,40,50 8 * * *"
-   - cron: "0,10,20,30 9 * * *"
-
-
-
+    # SORE (Pulang)
+    - cron: "0,10,20,30,40,50 8 * * *"
+    - cron: "0,10,20,30 9 * * *"
 
 jobs:
   absen:
@@ -36,44 +28,19 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Setup Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: "3.9"
 
       - name: Install dependencies
         run: pip install requests pytz
 
-      - name: Restore absen cache
-        uses: actions/cache@v3
-        with:
-          path: .absen_log
-          key: absen-log-${{ github.run_id }}
-          restore-keys: |
-            absen-log-
-      - name: Commit absen cache
-        run: |
-            git config user.name "github-actions"
-            git config user.email "github-actions@github.com"
-
-            if [ -f .absen_cache.json ]; then
-                 git add .absen_cach
-            else
-                 echo "Cache belum ada, skip commit"
-                 exit 0
-            fi
-
-            if git diff --cached --quiet; then
-              echo "⏭️ Tidak ada perubahan cache, skip push"
-              exit 0
-            fi
-
-            git commit -m "update absen cache"
-            git pull --rebase origin main
-            git push origin main
-
+      # ===============================
+      # JALANKAN SCRIPT DULU
+      # ===============================
       - name: Run absen script
         env:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
@@ -81,3 +48,28 @@ jobs:
           ABSEN_MODE: ${{ secrets.ABSEN_MODE }}
           JENIS_ABSEN: ${{ github.event.inputs.jenis_absen }}
         run: python absen_github.py
+
+      # ===============================
+      # COMMIT CACHE SETELAH SCRIPT
+      # ===============================
+      - name: Commit absen cache
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+
+          if [ ! -f .absen_cache.json ]; then
+            echo "⏭️ Cache belum ada, skip commit"
+            exit 0
+          fi
+
+          git add .absen_cache.json
+
+          if git diff --cached --quiet; then
+            echo "⏭️ Tidak ada perubahan cache"
+            exit 0
+          fi
+
+          git commit -m "update absen cache"
+          git pull --rebase origin main
+          git push origin main
+
