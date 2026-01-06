@@ -253,7 +253,7 @@ def main():
             }
         )
 
-        sukses = response.status_code == 200 and "berhasil" in response.text.lower()
+        sukses = response.status_code == 200 # and "berhasil" in response.text.lower()
 
         if sukses:
             #with open(file_log, "w") as f:
