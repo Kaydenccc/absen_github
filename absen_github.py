@@ -9,11 +9,11 @@ import shutil
 from pathlib import Path
 from datetime import datetime, time as dt_time
 
-
+# ================= FILE CACHE =================
 CACHE_FILE = Path(".absen_cache.json")
 BACKUP_FILE = Path(".absen_cache.backup.json")
 
-
+# ================= CACHE =================
 def load_cache():
     if not CACHE_FILE.exists():
         return {}
@@ -21,13 +21,9 @@ def load_cache():
     try:
         with open(CACHE_FILE, "r") as f:
             return json.load(f)
-
     except json.JSONDecodeError:
-        print("⚠️ CACHE RUSAK! File tidak bisa dibaca.")
-        return {
-            "__CORRUPTED__": True
-        }
-
+        print("⚠️ CACHE RUSAK")
+        return {"__CORRUPTED__": True}
 
 def save_cache(cache):
     if CACHE_FILE.exists():
@@ -36,250 +32,144 @@ def save_cache(cache):
     with open(CACHE_FILE, "w") as f:
         json.dump(cache, f, indent=2)
 
-
-
-
-def tentukan_jenis_absen(now):
-    """
-    Menentukan jenis absen berdasarkan waktu WITA
-    Return:
-      - "masuk"
-      - "pulang"
-      - None (bukan waktu absen / hari libur)
-    """
-
-    hari = now.weekday()  # 0=Senin ... 6=Minggu
-    jam = now.time()
-
-    # ================= PROTEKSI HARI =================
-    # Sabtu (5) & Minggu (6) langsung ditolak
-    if hari >= 5:
-        return None
-
-    # ================= ABSEN MASUK =================
-    # Senin–Jumat | 06:00 – 07:15
-    if 0 <= hari <= 4:
-        if dt_time(6, 0) <= jam <= dt_time(7, 15):
-            return "masuk"
-
-    # ================= ABSEN PULANG =================
-    # Senin–Kamis | 16:00 – 17:00
-    if 0 <= hari <= 3:
-        if dt_time(16, 0) <= jam <= dt_time(17, 0):
-            return "pulang"
-
-    # Jumat | 16:30 – 17:30
-    if hari == 4:
-        if dt_time(16, 30) <= jam <= dt_time(17, 30):
-            return "pulang"
-
-
-
-def save_cache(data):
-    with open(CACHE_FILE, "w") as f:
-        json.dump(data, f, indent=2)
-
-
-def tentukan_jenis_absen(now):
-    """
-    Menentukan jenis absen berdasarkan waktu WITA
-    Return:
-      - "masuk"
-      - "pulang"
-      - None (bukan waktu absen / hari libur)
-    """
-
-    hari = now.weekday()  # 0=Senin ... 6=Minggu
-    jam = now.time()
-
-    # ================= PROTEKSI HARI =================
-    # Sabtu (5) & Minggu (6) langsung ditolak
-    if hari >= 5:
-        return None
-
-    # ================= ABSEN MASUK =================
-    # Senin–Jumat | 06:00 – 07:15
-    if 0 <= hari <= 4:
-        if dt_time(6, 0) <= jam <= dt_time(7, 15):
-            return "masuk"
-
-    # ================= ABSEN PULANG =================
-    # Senin–Kamis | 16:00 – 17:00
-    if 0 <= hari <= 3:
-        if dt_time(16, 0) <= jam <= dt_time(17, 0):
-            return "pulang"
-
-    # Jumat | 16:30 – 17:30
-    if hari == 4:
-        if dt_time(16, 30) <= jam <= dt_time(17, 30):
-            return "pulang"
-
-    # ================= DI LUAR JAM =================
-    return None
-
-
+# ================= TELEGRAM =================
 def send_telegram(message):
-    token = os.getenv('TELEGRAM_TOKEN')
-    chat_id = os.getenv('TELEGRAM_CHAT_ID')
+    token = os.getenv("TELEGRAM_TOKEN")
+    chat_id = os.getenv("TELEGRAM_CHAT_ID")
 
     if not token or not chat_id:
-        print("⚠️ Telegram token/chat_id tidak ditemukan")
         return
 
     try:
-        url = f"https://api.telegram.org/bot{token}/sendMessage"
-        payload = {
-            "chat_id": chat_id,
-            "text": message,
-            "parse_mode": "HTML"
-        }
-        requests.post(url, json=payload, timeout=10)
+        requests.post(
+            f"https://api.telegram.org/bot{token}/sendMessage",
+            json={
+                "chat_id": chat_id,
+                "text": message,
+                "parse_mode": "HTML"
+            },
+            timeout=10
+        )
     except Exception as e:
-        print(f"❌ Telegram error: {e}")
+        print("Telegram error:", e)
 
-
-def sudah_absen(jenis, now):
-    tanggal = now.strftime("%Y-%m-%d")
-    os.makedirs(".absen_log", exist_ok=True)
-    file_log = f".absen_log/{tanggal}_{jenis}.log"
-    return os.path.exists(file_log), file_log
-
-def cek_dan_buat_log(jenis, now):
-    tanggal = now.strftime("%Y-%m-%d")
-    os.makedirs(".absen_log", exist_ok=True)
-    path = f".absen_log/{tanggal}_{jenis}.log"
-
-    if os.path.exists(path):
-        return False, path   # sudah absen
-
-    return True, path
-
+# ================= MODE OFF =================
 def mode_off_manual():
-    mode = os.getenv("ABSEN_MODE", "ON").upper()
-    return mode == "OFF"
+    return os.getenv("ABSEN_MODE", "ON").upper() == "OFF"
 
+# ================= LOGIKA WAKTU =================
+def tentukan_jenis_absen(now):
+    hari = now.weekday()  # 0=Senin
+    jam = now.time()
 
+    # Sabtu & Minggu
+    if hari >= 5:
+        return None
+
+    # MASUK Senin–Jumat 06:00–07:15
+    if dt_time(6, 0) <= jam <= dt_time(7, 15):
+        return "masuk"
+
+    # PULANG Senin–Kamis 16:00–17:00
+    if hari <= 3 and dt_time(16, 0) <= jam <= dt_time(17, 0):
+        return "pulang"
+
+    # PULANG Jumat 16:30–17:30
+    if hari == 4 and dt_time(16, 30) <= jam <= dt_time(17, 30):
+        return "pulang"
+
+    return None
+
+# ================= MAIN =================
 def main():
-    # ================= MODE OFF MANUAL =================
     if mode_off_manual():
-        print("⛔ MODE OFF MANUAL AKTIF - absensi dinonaktifkan")
+        print("⛔ MODE OFF AKTIF")
         return
 
-    # ================= KONFIGURASI =================
+    # Konfigurasi
     NIP = "199909262025051003"
     LAT_KANTOR = -3.2795460218952925
     LON_KANTOR = 119.85262806281504
 
     wita = pytz.timezone("Asia/Makassar")
     now = datetime.now(wita)
+    today = now.strftime("%Y-%m-%d")
 
     print("=" * 50)
     print("🚀 SISTEM ABSEN OTOMATIS")
-    print(f"📅 {now.strftime('%d/%m/%Y')}")
-    print(f"🕒 {now.strftime('%H:%M:%S')} WITA")
+    print(now.strftime("📅 %d/%m/%Y"))
+    print(now.strftime("🕒 %H:%M:%S WITA"))
     print("=" * 50)
 
-    # ================= JENIS ABSEN =================
+    # Tentukan jenis
     jenis_input = os.getenv("JENIS_ABSEN", "auto")
+    jenis = tentukan_jenis_absen(now) if jenis_input == "auto" else jenis_input
 
-    if jenis_input == "auto":
-        jenis = tentukan_jenis_absen(now)
-        if not jenis:
-            print("⏸️ Di luar jam absen")
-            return
-    else:
-        jenis = jenis_input
+    if jenis not in ("masuk", "pulang"):
+        print("⏸️ BUKAN WAKTU ABSEN")
+        return
 
-    # ================= PROTEKSI 1 HARI 1x =================
-    today = now.strftime("%Y-%m-%d")
+    # Cache
     cache = load_cache()
-
     if "__CORRUPTED__" in cache:
-       send_telegram(
-          "⚠️ <b>CACHE ABSEN RUSAK</b>\n"
-          "Workflow dihentikan demi keamanan data."
-       )
-       return
+        send_telegram("⚠️ <b>CACHE ABSEN RUSAK</b>\nWorkflow dihentikan.")
+        return
 
-
-    # Inisialisasi hari ini
     if today not in cache:
-       cache[today] = {
-          "masuk": False,
-          "pulang": False
-       }
+        cache[today] = {"masuk": False, "pulang": False}
 
-       # ===== PROTEKSI 1 HARI 1X =====
-    if cache[today].get(jenis):
-        print(f"⛔ Absen {jenis} hari ini sudah dilakukan")
+    if cache[today][jenis]:
         send_telegram(
             f"⛔ <b>ABSEN DIBATALKAN</b>\n"
             f"Jenis: {jenis.upper()}\n"
             f"Tanggal: {today}\n"
-            f"Alasan: Sudah absen sebelumnya"
+            f"Alasan: Sudah absen"
         )
         return
 
-
-      
-    # ================= RANDOM DELAY =================
+    # Delay natural
     delay = random.randint(30, 300)
-    print(f"⏳ Delay {delay} detik agar natural...")
+    print(f"⏳ Delay {delay} detik")
     time.sleep(delay)
 
-    # ================= RANDOM LOKASI =================
-    radius_deg = 20 / 111111.0
-    r = radius_deg * math.sqrt(random.random())
-    theta = random.random() * 2 * math.pi
-
-    delta_lat = r * math.cos(theta)
-    delta_lon = r * math.sin(theta) / math.cos(math.radians(LAT_KANTOR))
-
-    lat = LAT_KANTOR + delta_lat
-    lon = LON_KANTOR + delta_lon
+    # Lokasi acak ±20m
+    r = (20 / 111111) * math.sqrt(random.random())
+    t = random.random() * 2 * math.pi
+    lat = LAT_KANTOR + r * math.cos(t)
+    lon = LON_KANTOR + r * math.sin(t) / math.cos(math.radians(LAT_KANTOR))
     lokasi = f"{round(lat,7)},{round(lon,7)}"
 
     print(f"🎯 Absen: {jenis}")
     print(f"📍 Lokasi: {lokasi}")
 
-    # ================= KIRIM ABSEN =================
     try:
-        response = requests.post(
+        res = requests.post(
             "https://sielka.kemenagtanatoraja.id/tambahabsentes.php",
             data={"nip": NIP, "lokasi": lokasi},
-            timeout=30,
             headers={
-                "User-Agent": "Dalvik/2.1.0 (Linux; U; Android 12; Redmi Note 11 Pro Build/SP1A.210812.016)"
-            }
+                "User-Agent": "Dalvik/2.1.0 (Linux; Android 12; Redmi Note 11 Pro)"
+            },
+            timeout=30
         )
 
-        sukses = response.status_code == 200 # and "berhasil" in response.text.lower()
-
-        if sukses:
-            #with open(file_log, "w") as f:
-                #f.write(f"{now.isoformat()} | {lokasi}\n")
-            # Tandai berhasil di cache
+        if res.status_code == 200:
             cache[today][jenis] = True
             save_cache(cache)
 
             send_telegram(
                 f"✅ <b>ABSEN {jenis.upper()} BERHASIL</b>\n"
-                f"📅 {now.strftime('%d/%m/%Y %H:%M:%S')} WITA\n"
-                f"📍 {lokasi}\n"
-                f"📝 {response.text.strip()}"
+                f"{now.strftime('%d/%m/%Y %H:%M:%S')} WITA\n"
+                f"📍 {lokasi}"
             )
         else:
             send_telegram(
-                f"❌ <b>ABSEN {jenis.upper()} GAGAL</b>\n"
-                f"📅 {now.strftime('%d/%m/%Y %H:%M:%S')} WITA\n"
-                f"📍 {lokasi}\n"
-                f"🔢 {response.status_code}\n"
-                f"📝 {response.text[:120]}"
+                f"❌ <b>ABSEN GAGAL</b>\n"
+                f"Status: {res.status_code}"
             )
 
     except Exception as e:
-        send_telegram(f"🚨 <b>ERROR SISTEM</b>\n{str(e)}")
-
+        send_telegram(f"🚨 ERROR\n{e}")
 
 if __name__ == "__main__":
     main()
+
