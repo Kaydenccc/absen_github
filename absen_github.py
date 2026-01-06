@@ -86,6 +86,9 @@ def main():
         print("⛔ MODE OFF AKTIF")
         return
 
+    if not CACHE_FILE.exists():
+        save_cache({})
+
     # Konfigurasi
     NIP = "199909262025051003"
     LAT_KANTOR = -3.2795460218952925
