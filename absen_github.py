@@ -249,8 +249,7 @@ def main():
             data={"nip": NIP, "lokasi": lokasi},
             timeout=30,
             headers={
-                "User-Agent": "Dalvik/2.1.0 (Linux; U; Android 12; Redmi Note 11 Pro Build/SP1A.210812.016)
-"
+                "User-Agent": "Dalvik/2.1.0 (Linux; U; Android 12; Redmi Note 11 Pro Build/SP1A.210812.016)"
             }
         )
 
