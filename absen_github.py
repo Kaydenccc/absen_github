@@ -192,7 +192,7 @@ def main():
                 f"✅ <b>ABSEN {jenis.upper()} BERHASIL</b>\n"
                 f"📅 {now.strftime('%d/%m/%Y %H:%M:%S')} WITA\n"
                 f"📍 {lokasi}\n"
-                f"📝 {response.text.strip()}"
+                f"📝 {res.text.strip()}"
             )
         else:
             send_telegram(
