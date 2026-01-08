@@ -9,104 +9,78 @@ import shutil
 from pathlib import Path
 from datetime import datetime, time as dt_time
 
-
 CACHE_FILE = Path(".absen_cache.json")
 BACKUP_FILE = Path(".absen_cache.backup.json")
 
-# ================= LOAD CACHE =================
+# ================= CACHE =================
 def load_cache():
-    # Jika file belum ada → buat cache kosong
-    if not CACHE_FILE.exists():
+    if not CACHE_FILE.exists() or CACHE_FILE.stat().st_size == 0:
         return {}
-
-    # Jika file ada tapi kosong
-    if CACHE_FILE.stat().st_size == 0:
-        print("⚠️ CACHE KOSONG, reset")
-        return {}
-
     try:
         with CACHE_FILE.open("r", encoding="utf-8") as f:
             data = json.load(f)
-
-            # Validasi dasar
             if not isinstance(data, dict):
-                raise ValueError("Format cache tidak valid")
-
+                raise ValueError
             return data
-
-    except (json.JSONDecodeError, ValueError) as e:
-        print(f"⚠️ CACHE RUSAK: {e}")
-
-        # Backup file rusak (jika belum pernah)
-        if CACHE_FILE.exists():
-            shutil.copy(CACHE_FILE, BACKUP_FILE)
-
+    except Exception:
+        shutil.copy(CACHE_FILE, BACKUP_FILE)
         return {"__CORRUPTED__": True}
 
-
-# ================= SAVE CACHE =================
 def save_cache(cache: dict):
-
-    # Backup versi lama
     if CACHE_FILE.exists():
         shutil.copy(CACHE_FILE, BACKUP_FILE)
 
-    # Simpan cache baru (atomic write)
-    temp_file = CACHE_FILE.with_suffix(".tmp")
-
-    with temp_file.open("w", encoding="utf-8") as f:
+    tmp = CACHE_FILE.with_suffix(".tmp")
+    with tmp.open("w", encoding="utf-8") as f:
         json.dump(cache, f, indent=2, ensure_ascii=False)
-
-    temp_file.replace(CACHE_FILE)
-
+    tmp.replace(CACHE_FILE)
 
 # ================= TELEGRAM =================
-def send_telegram(message):
+def send_telegram(msg):
     token = os.getenv("TELEGRAM_TOKEN")
     chat_id = os.getenv("TELEGRAM_CHAT_ID")
-
     if not token or not chat_id:
         return
-
-    try:
-        requests.post(
-            f"https://api.telegram.org/bot{token}/sendMessage",
-            json={
-                "chat_id": chat_id,
-                "text": message,
-                "parse_mode": "HTML"
-            },
-            timeout=10
-        )
-    except Exception as e:
-        print("Telegram error:", e)
+    requests.post(
+        f"https://api.telegram.org/bot{token}/sendMessage",
+        json={"chat_id": chat_id, "text": msg, "parse_mode": "HTML"},
+        timeout=10
+    )
 
 # ================= MODE OFF =================
 def mode_off_manual():
     return os.getenv("ABSEN_MODE", "ON").upper() == "OFF"
 
-# ================= LOGIKA WAKTU =================
+# ================= JENIS ABSEN (HANYA MENENTUKAN JENIS) =================
 def tentukan_jenis_absen(now):
-    hari = now.weekday()  # 0=Senin
+    hari = now.weekday()
     jam = now.time()
 
-    # Sabtu & Minggu
     if hari >= 5:
         return None
 
-    # MASUK Senin–Jumat 06:00–07:15
     if dt_time(6, 0) <= jam <= dt_time(7, 15):
         return "masuk"
 
-    # PULANG Senin–Kamis 16:00–17:00
     if hari <= 3 and dt_time(16, 0) <= jam <= dt_time(17, 0):
         return "pulang"
 
-    # PULANG Jumat 16:30–17:30
     if hari == 4 and dt_time(16, 30) <= jam <= dt_time(17, 30):
         return "pulang"
 
     return None
+
+# ================= JAM MANUSIAWI =================
+def generate_target_time(start: dt_time, end: dt_time):
+    start_sec = start.hour*3600 + start.minute*60
+    end_sec = end.hour*3600 + end.minute*60
+    rand = random.randint(start_sec, end_sec)
+
+    h = rand // 3600
+    m = (rand % 3600) // 60
+    s = random.randint(0, 59)
+
+    return f"{h:02d}:{m:02d}:{s:02d}"
 
 # ================= MAIN =================
 def main():
@@ -132,47 +106,62 @@ def main():
     print(now.strftime("🕒 %H:%M:%S WITA"))
     print("=" * 50)
 
-    # Tentukan jenis
-    # Tentukan jenis absen BERDASARKAN JAM
     jenis = tentukan_jenis_absen(now)
-
     if jenis not in ("masuk", "pulang"):
-        print("⏸️ BUKAN WAKTU ABSEN")
+        print("⏸️ Di luar jam absen")
         return
 
-
-    # Cache
     cache = load_cache()
     if "__CORRUPTED__" in cache:
-        send_telegram("⚠️ <b>CACHE ABSEN RUSAK</b>\nWorkflow dihentikan.")
+        send_telegram("⚠️ CACHE RUSAK, workflow dihentikan")
         return
 
+    # Inisialisasi hari
     if today not in cache:
-        cache[today] = {"masuk": False, "pulang": False}
+        cache[today] = {
+            "masuk": {"done": False, "target": None},
+            "pulang": {"done": False, "target": None}
+        }
 
-    if cache[today][jenis]:
-        send_telegram(
-            f"⛔ <b>ABSEN DIBATALKAN</b>\n"
-            f"Jenis: {jenis.upper()}\n"
-            f"Tanggal: {today}\n"
-            f"Alasan: Sudah absen"
-        )
+    # Jika sudah absen
+    if cache[today][jenis]["done"]:
+        print("⛔ Sudah absen hari ini")
         return
 
-    # Delay natural
-    delay = random.randint(30, 300)
-    print(f"⏳ Delay {delay} detik")
-    time.sleep(delay)
+    # Tentukan target jam SEKALI SAJA
+    if not cache[today][jenis]["target"]:
+        if jenis == "masuk":
+            cache[today][jenis]["target"] = generate_target_time(
+                dt_time(6, 10), dt_time(7, 10)
+            )
+        else:
+            if now.weekday() == 4:
+                cache[today][jenis]["target"] = generate_target_time(
+                    dt_time(16, 35), dt_time(17, 20)
+                )
+            else:
+                cache[today][jenis]["target"] = generate_target_time(
+                    dt_time(16, 10), dt_time(16, 55)
+                )
+        save_cache(cache)
 
-    # Lokasi acak ±20m
+    target = datetime.strptime(
+        cache[today][jenis]["target"], "%H:%M:%S"
+    ).time()
+
+    # BELUM WAKTUNYA
+    if now.time() < target:
+        print(f"⏳ Menunggu jam target {target}")
+        return
+
+    # ================= LOKASI =================
     r = (20 / 111111) * math.sqrt(random.random())
     t = random.random() * 2 * math.pi
     lat = LAT_KANTOR + r * math.cos(t)
     lon = LON_KANTOR + r * math.sin(t) / math.cos(math.radians(LAT_KANTOR))
     lokasi = f"{round(lat,7)},{round(lon,7)}"
 
-    print(f"🎯 Absen: {jenis}")
-    print(f"📍 Lokasi: {lokasi}")
+    print(f"🎯 Absen {jenis} @ {lokasi}")
 
     try:
         res = requests.post(
@@ -185,7 +174,7 @@ def main():
         )
 
         if res.status_code == 200:
-            cache[today][jenis] = True
+            cache[today][jenis]["done"] = True
             save_cache(cache)
 
             send_telegram(
@@ -195,14 +184,10 @@ def main():
                 f"📝 {res.text.strip()}"
             )
         else:
-            send_telegram(
-                f"❌ <b>ABSEN GAGAL</b>\n"
-                f"Status: {res.status_code}"
-            )
+            send_telegram(f"❌ ABSEN GAGAL ({res.status_code})")
 
     except Exception as e:
         send_telegram(f"🚨 ERROR\n{e}")
 
 if __name__ == "__main__":
     main()
-
