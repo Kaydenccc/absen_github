@@ -2,13 +2,13 @@ import os
 import requests
 import random
 import math
-import time
 import pytz
 import json
 import shutil
 from pathlib import Path
-from datetime import datetime, time as dt_time
+from datetime import datetime, time as dt_time, timedelta
 
+# ================= FILE CACHE =================
 CACHE_FILE = Path(".absen_cache.json")
 BACKUP_FILE = Path(".absen_cache.backup.json")
 
@@ -29,7 +29,6 @@ def load_cache():
 def save_cache(cache: dict):
     if CACHE_FILE.exists():
         shutil.copy(CACHE_FILE, BACKUP_FILE)
-
     tmp = CACHE_FILE.with_suffix(".tmp")
     with tmp.open("w", encoding="utf-8") as f:
         json.dump(cache, f, indent=2, ensure_ascii=False)
@@ -41,17 +40,20 @@ def send_telegram(msg):
     chat_id = os.getenv("TELEGRAM_CHAT_ID")
     if not token or not chat_id:
         return
-    requests.post(
-        f"https://api.telegram.org/bot{token}/sendMessage",
-        json={"chat_id": chat_id, "text": msg, "parse_mode": "HTML"},
-        timeout=10
-    )
+    try:
+        requests.post(
+            f"https://api.telegram.org/bot{token}/sendMessage",
+            json={"chat_id": chat_id, "text": msg, "parse_mode": "HTML"},
+            timeout=10
+        )
+    except Exception as e:
+        print("Telegram error:", e)
 
-# ================= MODE OFF =================
-def mode_off_manual():
+# ================= MODE =================
+def mode_off():
     return os.getenv("ABSEN_MODE", "ON").upper() == "OFF"
 
-# ================= JENIS ABSEN (HANYA MENENTUKAN JENIS) =================
+# ================= JENIS ABSEN =================
 def tentukan_jenis_absen(now):
     hari = now.weekday()
     jam = now.time()
@@ -70,22 +72,18 @@ def tentukan_jenis_absen(now):
 
     return None
 
-# ================= JAM MANUSIAWI =================
-def generate_target_time(start: dt_time, end: dt_time):
-    start_sec = start.hour*3600 + start.minute*60
-    end_sec = end.hour*3600 + end.minute*60
-    rand = random.randint(start_sec, end_sec)
-
-    h = rand // 3600
-    m = (rand % 3600) // 60
-    s = random.randint(0, 59)
-
-    return f"{h:02d}:{m:02d}:{s:02d}"
+# ================= OFFSET MENIT =================
+def generate_offset(jenis, hari):
+    if jenis == "masuk":
+        return random.randint(5, 65)
+    if hari == 4:  # Jumat
+        return random.randint(5, 45)
+    return random.randint(5, 50)
 
 # ================= MAIN =================
 def main():
-    if mode_off_manual():
-        print("⛔ MODE OFF AKTIF")
+    if mode_off():
+        print("⛔ MODE OFF")
         return
 
     if not CACHE_FILE.exists():
@@ -93,8 +91,8 @@ def main():
 
     # Konfigurasi
     NIP = "199909262025051003"
-    LAT_KANTOR = -3.2795460218952925
-    LON_KANTOR = 119.85262806281504
+    LAT = -3.2795460218952925
+    LON = 119.85262806281504
 
     wita = pytz.timezone("Asia/Makassar")
     now = datetime.now(wita)
@@ -113,63 +111,55 @@ def main():
 
     cache = load_cache()
     if "__CORRUPTED__" in cache:
-        send_telegram("⚠️ CACHE RUSAK, workflow dihentikan")
+        send_telegram("⚠️ CACHE RUSAK – workflow dihentikan")
         return
 
-    # Inisialisasi hari
+    # Init hari
     if today not in cache:
         cache[today] = {
-            "masuk": {"done": False, "target": None},
-            "pulang": {"done": False, "target": None}
+            "masuk": {"done": False, "offset": None},
+            "pulang": {"done": False, "offset": None}
         }
 
-    # Jika sudah absen
     if cache[today][jenis]["done"]:
         print("⛔ Sudah absen hari ini")
         return
 
-    # Tentukan target jam SEKALI SAJA
-    if not cache[today][jenis]["target"]:
-        if jenis == "masuk":
-            cache[today][jenis]["target"] = generate_target_time(
-                dt_time(6, 10), dt_time(7, 10)
-            )
-        else:
-            if now.weekday() == 4:
-                cache[today][jenis]["target"] = generate_target_time(
-                    dt_time(16, 35), dt_time(17, 20)
-                )
-            else:
-                cache[today][jenis]["target"] = generate_target_time(
-                    dt_time(16, 10), dt_time(16, 55)
-                )
+    # Set offset sekali per hari
+    if cache[today][jenis]["offset"] is None:
+        offset = generate_offset(jenis, now.weekday())
+        cache[today][jenis]["offset"] = offset
         save_cache(cache)
+    else:
+        offset = cache[today][jenis]["offset"]
 
-    target = datetime.strptime(
-        cache[today][jenis]["target"], "%H:%M:%S"
+    # Tentukan jam dasar
+    base_time = (
+        dt_time(6, 0) if jenis == "masuk"
+        else dt_time(16, 30) if now.weekday() == 4
+        else dt_time(16, 0)
+    )
+
+    target_time = (
+        datetime.combine(now.date(), base_time) + timedelta(minutes=offset)
     ).time()
 
-    # BELUM WAKTUNYA
-    if now.time() < target:
-        print(f"⏳ Menunggu jam target {target}")
+    if now.time() < target_time:
+        print(f"⏳ Menunggu jam manusiawi {target_time}")
         return
 
-    # ================= LOKASI =================
+    # Lokasi acak ±20m
     r = (20 / 111111) * math.sqrt(random.random())
     t = random.random() * 2 * math.pi
-    lat = LAT_KANTOR + r * math.cos(t)
-    lon = LON_KANTOR + r * math.sin(t) / math.cos(math.radians(LAT_KANTOR))
+    lat = LAT + r * math.cos(t)
+    lon = LON + r * math.sin(t) / math.cos(math.radians(LAT))
     lokasi = f"{round(lat,7)},{round(lon,7)}"
-
-    print(f"🎯 Absen {jenis} @ {lokasi}")
 
     try:
         res = requests.post(
             "https://sielka.kemenagtanatoraja.id/tambahabsentes.php",
             data={"nip": NIP, "lokasi": lokasi},
-            headers={
-                "User-Agent": "Dalvik/2.1.0 (Linux; Android 12; Redmi Note 11 Pro)"
-            },
+            headers={"User-Agent": "Dalvik/2.1.0"},
             timeout=30
         )
 
