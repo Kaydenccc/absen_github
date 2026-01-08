@@ -5,75 +5,39 @@ concurrency:
   cancel-in-progress: true
 
 on:
-  workflow_dispatch:
-    inputs:
-      jenis_absen:
-        description: "Jenis absen (masuk/pulang/auto)"
-        required: false
-        default: "auto"
-        type: choice
-        options:
-          - auto
-          - masuk
-          - pulang
-
   schedule:
-    # PAGI (Masuk)
-    - cron: "0,10,20,30,40,50 22 * * *"
-    - cron: "0,10 23 * * *"
+    # PAGI (WITA)
+    - cron: "*/10 22-23 * * 1-5"   # 06:00–07:59
+    # SORE (WITA)
+    - cron: "*/10 8-9 * * 1-5"     # 16:00–17:59
 
-    # SORE (Pulang)
-    - cron: "0,10,20,30,40,50 8 * * *"
-    - cron: "0,10,20,30 9 * * *"
+  workflow_dispatch:
 
 jobs:
   absen:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.9"
 
-      - name: Install dependencies
-        run: pip install requests pytz
+      - run: pip install requests pytz
 
-      # ===============================
-      # JALANKAN SCRIPT DULU
-      # ===============================
-      - name: Run absen script
+      - name: Run absen
         env:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           ABSEN_MODE: ${{ secrets.ABSEN_MODE }}
-          JENIS_ABSEN: ${{ github.event.inputs.jenis_absen }}
         run: python absen_github.py
 
-      # ===============================
-      # COMMIT CACHE SETELAH SCRIPT
-      # ===============================
-      - name: Commit absen cache
+      - name: Commit cache
         run: |
           git config user.name "github-actions"
           git config user.email "github-actions@github.com"
-
-          if [ ! -f .absen_cache.json ]; then
-            echo "⏭️ Cache belum ada, skip commit"
-            exit 0
-          fi
-
           git add .absen_cache.json
-
-          if git diff --cached --quiet; then
-            echo "⏭️ Tidak ada perubahan cache"
-            exit 0
-          fi
-
-          git commit -m "update absen cache"
+          git diff --cached --quiet || git commit -m "update absen cache"
           git pull --rebase origin main
           git push origin main
-
