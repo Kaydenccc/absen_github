@@ -61,13 +61,16 @@ def tentukan_jenis_absen(now):
     if hari >= 5:
         return None
 
-    if dt_time(6, 0) <= jam <= dt_time(7, 15):
+    # MASUK: 06:00 – 07:30
+    if dt_time(6, 0) <= jam <= dt_time(7, 30):
         return "masuk"
 
-    if hari <= 3 and dt_time(16, 0) <= jam <= dt_time(17, 0):
+    # PULANG SENIN–KAMIS
+    if hari <= 3 and dt_time(16, 0) <= jam <= dt_time(17, 30):
         return "pulang"
 
-    if hari == 4 and dt_time(16, 30) <= jam <= dt_time(17, 30):
+    # PULANG JUMAT
+    if hari == 4 and dt_time(16, 30) <= jam <= dt_time(18, 0):
         return "pulang"
 
     return None
@@ -75,10 +78,10 @@ def tentukan_jenis_absen(now):
 # ================= OFFSET MENIT =================
 def generate_offset(jenis, hari):
     if jenis == "masuk":
-        return random.randint(5, 65)
+        return random.randint(5, 75)   # maksimal 07:15
     if hari == 4:  # Jumat
         return random.randint(5, 45)
-    return random.randint(5, 50)
+    return random.randint(5, 60)
 
 # ================= MAIN =================
 def main():
@@ -89,7 +92,7 @@ def main():
     if not CACHE_FILE.exists():
         save_cache({})
 
-    # Konfigurasi
+    # DATA ABSEN
     NIP = "199909262025051003"
     LAT = -3.2795460218952925
     LON = 119.85262806281504
@@ -114,18 +117,18 @@ def main():
         send_telegram("⚠️ CACHE RUSAK – workflow dihentikan")
         return
 
-    # Init hari
+    # ===== NORMALISASI CACHE (ANTI ERROR LAMA) =====
     if today not in cache:
-        cache[today] = {
-            "masuk": {"done": False, "offset": None},
-            "pulang": {"done": False, "offset": None}
-        }
+        cache[today] = {}
+
+    if jenis not in cache[today] or isinstance(cache[today][jenis], bool):
+        cache[today][jenis] = {"done": False, "offset": None}
 
     if cache[today][jenis]["done"]:
         print("⛔ Sudah absen hari ini")
         return
 
-    # Set offset sekali per hari
+    # ===== OFFSET SEKALI PER HARI =====
     if cache[today][jenis]["offset"] is None:
         offset = generate_offset(jenis, now.weekday())
         cache[today][jenis]["offset"] = offset
@@ -133,22 +136,27 @@ def main():
     else:
         offset = cache[today][jenis]["offset"]
 
-    # Tentukan jam dasar
-    base_time = (
-        dt_time(6, 0) if jenis == "masuk"
-        else dt_time(16, 30) if now.weekday() == 4
-        else dt_time(16, 0)
-    )
+    # ===== JAM DASAR =====
+    if jenis == "masuk":
+        base_time = dt_time(6, 0)
+    elif now.weekday() == 4:
+        base_time = dt_time(16, 30)
+    else:
+        base_time = dt_time(16, 0)
 
     target_time = (
         datetime.combine(now.date(), base_time) + timedelta(minutes=offset)
     ).time()
 
+    # BATAS MASUK 07:30
+    if jenis == "masuk" and target_time > dt_time(7, 30):
+        target_time = dt_time(7, 30)
+
     if now.time() < target_time:
         print(f"⏳ Menunggu jam manusiawi {target_time}")
         return
 
-    # Lokasi acak ±20m
+    # ===== LOKASI ±20m =====
     r = (20 / 111111) * math.sqrt(random.random())
     t = random.random() * 2 * math.pi
     lat = LAT + r * math.cos(t)
