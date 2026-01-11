@@ -6,10 +6,8 @@ concurrency:
 
 on:
   schedule:
-    # PAGI (WITA)
-    - cron: "*/10 22-23 * * 1-5"   # 06:00–07:59
-    # SORE (WITA)
-    - cron: "*/10 8-9 * * 1-5"     # 16:00–17:59
+  - cron: "*/10 21-23 * * 1-5"
+  - cron: "*/10 7-9 * * 1-5"
 
   workflow_dispatch:
 
