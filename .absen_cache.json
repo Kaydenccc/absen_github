@@ -131,7 +131,7 @@
       "offset": 11
     },
     "pulang": {
-      "done": false,
+      "done": true,
       "offset": 42
     }
   }
