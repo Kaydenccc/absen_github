@@ -94,8 +94,8 @@ def main():
 
     # DATA ABSEN
     NIP = "199909262025051003"
-    LAT = -3.2795460218952925
-    LON = 119.85262806281504
+    LAT = -3.279389
+    LON = 119.852500
 
     wita = pytz.timezone("Asia/Makassar")
     now = datetime.now(wita)
@@ -156,12 +156,13 @@ def main():
         print(f"⏳ Menunggu jam manusiawi {target_time}")
         return
 
-    # ===== LOKASI ±20m =====
-    r = (20 / 111111) * math.sqrt(random.random())
+    # ===== LOKASI (simulasi GPS HP — akurasi 5-18m, 6 desimal) =====
+    radius = random.uniform(5, 18)
+    r = (radius / 111111) * math.sqrt(random.random())
     t = random.random() * 2 * math.pi
     lat = LAT + r * math.cos(t)
     lon = LON + r * math.sin(t) / math.cos(math.radians(LAT))
-    lokasi = f"{round(lat,7)},{round(lon,7)}"
+    lokasi = f"{round(lat,6)},{round(lon,6)}"
 
     try:
         res = requests.post(
