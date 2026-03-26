@@ -94,8 +94,8 @@ def main():
 
     # DATA ABSEN
     NIP = "199909262025051003"
-    LAT = -3.279389
-    LON = 119.852500
+    LAT = -3.279515
+    LON = 119.852572
 
     wita = pytz.timezone("Asia/Makassar")
     now = datetime.now(wita)
