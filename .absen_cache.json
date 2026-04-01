@@ -388,5 +388,11 @@
       "done": true,
       "offset": 30
     }
+  },
+  "2026-04-02": {
+    "masuk": {
+      "done": false,
+      "offset": 21
+    }
   }
 }
