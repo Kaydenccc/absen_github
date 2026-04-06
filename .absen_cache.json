@@ -403,6 +403,10 @@
     "masuk": {
       "done": true,
       "offset": 9
+    },
+    "pulang": {
+      "done": true,
+      "offset": 5
     }
   }
 }
