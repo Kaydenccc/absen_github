@@ -533,6 +533,10 @@
     "masuk": {
       "done": true,
       "offset": 30
+    },
+    "pulang": {
+      "done": true,
+      "offset": 21
     }
   }
 }
