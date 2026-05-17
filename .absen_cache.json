@@ -666,5 +666,11 @@
       "done": true,
       "offset": 6
     }
+  },
+  "2026-05-18": {
+    "masuk": {
+      "done": false,
+      "offset": 30
+    }
   }
 }
