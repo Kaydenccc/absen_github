@@ -12,6 +12,16 @@ from datetime import datetime, time as dt_time, timedelta
 CACHE_FILE = Path(".absen_cache.json")
 BACKUP_FILE = Path(".absen_cache.backup.json")
 
+# ================= KONFIGURASI =================
+NIP         = "199909262025051003"
+PASSWORD    = os.getenv("SIELKA_PASSWORD")
+DEVICE_ID   = os.getenv("SIELKA_DEVICE_ID")   # android:Redmi:2201116SG:Redmi/veux_id/...
+BASE_URL    = "https://absensi.kemenagtanatoraja.id/api"
+
+# Koordinat kantor / lokasi kerja
+LAT_BASE    = -3.279546
+LON_BASE    = 119.852628
+
 # ================= CACHE =================
 def load_cache():
     if not CACHE_FILE.exists() or CACHE_FILE.stat().st_size == 0:
@@ -36,7 +46,7 @@ def save_cache(cache: dict):
 
 # ================= TELEGRAM =================
 def send_telegram(msg):
-    token = os.getenv("TELEGRAM_TOKEN")
+    token   = os.getenv("TELEGRAM_TOKEN")
     chat_id = os.getenv("TELEGRAM_CHAT_ID")
     if not token or not chat_id:
         return
@@ -53,56 +63,126 @@ def send_telegram(msg):
 def mode_off():
     return os.getenv("ABSEN_MODE", "ON").upper() == "OFF"
 
+# ================= HEADERS =================
+def get_headers():
+    return {
+        "Content-Type":  "application/json",
+        "Accept":        "application/json",
+        "X-Device-ID":   DEVICE_ID,
+        "X-User-NIP":    NIP,
+        "User-Agent":    f"SIELKA/2.0 (Android; {DEVICE_ID})",
+    }
+
+# ================= LOGIN =================
+def login(session: requests.Session) -> bool:
+    """Login ke SIELKA v2 dan simpan session cookie."""
+    try:
+        res = session.post(
+            f"{BASE_URL}/login",
+            json={
+                "nip":       NIP,
+                "password":  PASSWORD,
+                "device_id": DEVICE_ID,
+            },
+            headers=get_headers(),
+            timeout=30
+        )
+        data = res.json()
+        if data.get("success"):
+            print(f"✅ Login berhasil — {data['data']['nama']} ({data['data']['unit']})")
+            return True
+        else:
+            print(f"❌ Login gagal: {data.get('message')}")
+            send_telegram(f"❌ <b>LOGIN GAGAL</b>\n{data.get('message')}")
+            return False
+    except Exception as e:
+        print(f"❌ Login error: {e}")
+        send_telegram(f"🚨 <b>LOGIN ERROR</b>\n{e}")
+        return False
+
 # ================= JENIS ABSEN =================
 def tentukan_jenis_absen(now):
-    hari = now.weekday()
-    jam = now.time()
+    hari = now.weekday()  # 0=Senin ... 6=Minggu
+    jam  = now.time()
 
-    if hari >= 5:
+    if hari >= 5:  # Sabtu & Minggu
         return None
 
     # MASUK: 06:00 – 07:30
     if dt_time(6, 0) <= jam <= dt_time(7, 30):
         return "masuk"
 
-    # PULANG SENIN–KAMIS
+    # PULANG Senin–Kamis: 16:00 – 17:30
     if hari <= 3 and dt_time(16, 0) <= jam <= dt_time(17, 30):
         return "pulang"
 
-    # PULANG JUMAT
+    # PULANG Jumat: 16:30 – 18:00
     if hari == 4 and dt_time(16, 30) <= jam <= dt_time(18, 0):
         return "pulang"
 
     return None
 
-# ================= OFFSET MENIT =================
+# ================= OFFSET =================
 def generate_offset(jenis, hari):
-    if jenis == "masuk":
-        return random.randint(5, 30)   # maksimal 07:00
-    if hari == 4:  # Jumat
-        return random.randint(5, 30)
+    """Offset menit acak agar absen terlihat manusiawi."""
     return random.randint(5, 30)
+
+# ================= SIMULASI GPS =================
+def simulasi_gps():
+    """Koordinat acak dalam radius 5–18 meter dari lokasi kerja."""
+    radius = random.uniform(5, 18)
+    r = (radius / 111111) * math.sqrt(random.random())
+    t = random.random() * 2 * math.pi
+    lat = LAT_BASE + r * math.cos(t)
+    lon = LON_BASE + r * math.sin(t) / math.cos(math.radians(LAT_BASE))
+    accuracy = round(random.uniform(5.0, 18.0), 1)
+    return round(lat, 7), round(lon, 7), accuracy
+
+# ================= REKAM ABSEN =================
+def rekam_absen(session: requests.Session, lat, lon, accuracy) -> tuple[bool, str]:
+    """Kirim data absensi ke endpoint SIELKA v2."""
+    try:
+        res = session.post(
+            f"{BASE_URL}/attendance/record",
+            json={
+                "latitude":          lat,
+                "longitude":         lon,
+                "accuracy":          accuracy,
+                "altitude":          0.0,
+                "altitude_accuracy": 0.0,
+                "speed_accuracy":    0.0,
+                "heading_accuracy":  0.0,
+            },
+            headers=get_headers(),
+            timeout=30
+        )
+        data = res.json()
+        return data.get("success", False), data.get("message", res.text.strip())
+    except Exception as e:
+        return False, str(e)
 
 # ================= MAIN =================
 def main():
     if mode_off():
-        print("⛔ MODE OFF")
+        print("⛔ MODE OFF — absen dilewati")
+        return
+
+    # Validasi env vars
+    if not PASSWORD or not DEVICE_ID:
+        msg = "⚠️ SIELKA_PASSWORD atau SIELKA_DEVICE_ID belum diset di environment/secrets!"
+        print(msg)
+        send_telegram(msg)
         return
 
     if not CACHE_FILE.exists():
         save_cache({})
 
-    # DATA ABSEN
-    NIP = "199909262025051003"
-    LAT = -3.279515
-    LON = 119.852572
-
     wita = pytz.timezone("Asia/Makassar")
-    now = datetime.now(wita)
+    now  = datetime.now(wita)
     today = now.strftime("%Y-%m-%d")
 
     print("=" * 50)
-    print("🚀 SISTEM ABSEN OTOMATIS")
+    print("🚀 SISTEM ABSEN OTOMATIS — SIELKA v2")
     print(now.strftime("📅 %d/%m/%Y"))
     print(now.strftime("🕒 %H:%M:%S WITA"))
     print("=" * 50)
@@ -117,18 +197,17 @@ def main():
         send_telegram("⚠️ CACHE RUSAK – workflow dihentikan")
         return
 
-    # ===== NORMALISASI CACHE (ANTI ERROR LAMA) =====
+    # Normalisasi cache
     if today not in cache:
         cache[today] = {}
-
     if jenis not in cache[today] or isinstance(cache[today][jenis], bool):
         cache[today][jenis] = {"done": False, "offset": None}
 
     if cache[today][jenis]["done"]:
-        print("⛔ Sudah absen hari ini")
+        print(f"⛔ Absen {jenis} hari ini sudah tercatat")
         return
 
-    # ===== OFFSET SEKALI PER HARI =====
+    # Offset sekali per sesi
     if cache[today][jenis]["offset"] is None:
         offset = generate_offset(jenis, now.weekday())
         cache[today][jenis]["offset"] = offset
@@ -136,7 +215,7 @@ def main():
     else:
         offset = cache[today][jenis]["offset"]
 
-    # ===== JAM DASAR =====
+    # Jam dasar + offset
     if jenis == "masuk":
         base_time = dt_time(6, 0)
     elif now.weekday() == 4:
@@ -148,45 +227,46 @@ def main():
         datetime.combine(now.date(), base_time) + timedelta(minutes=offset)
     ).time()
 
-    # BATAS MASUK 07:30
+    # Batas atas jam masuk
     if jenis == "masuk" and target_time > dt_time(7, 30):
         target_time = dt_time(7, 30)
 
     if now.time() < target_time:
-        print(f"⏳ Menunggu jam manusiawi {target_time}")
+        print(f"⏳ Menunggu jam manusiawi → {target_time.strftime('%H:%M')} WITA")
         return
 
-    # ===== LOKASI (simulasi GPS HP — akurasi 5-18m, 6 desimal) =====
-    radius = random.uniform(5, 18)
-    r = (radius / 111111) * math.sqrt(random.random())
-    t = random.random() * 2 * math.pi
-    lat = LAT + r * math.cos(t)
-    lon = LON + r * math.sin(t) / math.cos(math.radians(LAT))
-    lokasi = f"{round(lat,6)},{round(lon,6)}"
+    # Simulasi GPS
+    lat, lon, accuracy = simulasi_gps()
+    print(f"📍 Lokasi: {lat}, {lon} (±{accuracy}m)")
 
-    try:
-        res = requests.post(
-            "https://sielka.kemenagtanatoraja.id/tambahabsentes.php",
-            data={"nip": NIP, "lokasi": lokasi},
-            headers={"User-Agent": "Dalvik/2.1.0"},
-            timeout=30
+    # Login dulu
+    session = requests.Session()
+    if not login(session):
+        return
+
+    # Rekam absen
+    print(f"📤 Mengirim absen {jenis.upper()}...")
+    success, message = rekam_absen(session, lat, lon, accuracy)
+
+    if success:
+        cache[today][jenis]["done"] = True
+        save_cache(cache)
+
+        hari_nama = ["Senin","Selasa","Rabu","Kamis","Jumat","Sabtu","Minggu"][now.weekday()]
+        send_telegram(
+            f"✅ <b>ABSEN {jenis.upper()} BERHASIL</b>\n"
+            f"📅 {hari_nama}, {now.strftime('%d/%m/%Y %H:%M:%S')} WITA\n"
+            f"📍 {lat}, {lon} (±{accuracy}m)\n"
+            f"💬 {message}"
         )
-
-        if res.status_code == 200:
-            cache[today][jenis]["done"] = True
-            save_cache(cache)
-
-            send_telegram(
-                f"✅ <b>ABSEN {jenis.upper()} BERHASIL</b>\n"
-                f"📅 {now.strftime('%d/%m/%Y %H:%M:%S')} WITA\n"
-                f"📍 {lokasi}\n"
-                f"📝 {res.text.strip()}"
-            )
-        else:
-            send_telegram(f"❌ ABSEN GAGAL ({res.status_code})")
-
-    except Exception as e:
-        send_telegram(f"🚨 ERROR\n{e}")
+        print(f"✅ Absen {jenis} berhasil: {message}")
+    else:
+        send_telegram(
+            f"❌ <b>ABSEN {jenis.upper()} GAGAL</b>\n"
+            f"📅 {now.strftime('%d/%m/%Y %H:%M:%S')} WITA\n"
+            f"💬 {message}"
+        )
+        print(f"❌ Absen {jenis} gagal: {message}")
 
 if __name__ == "__main__":
     main()
