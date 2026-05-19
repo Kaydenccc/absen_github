@@ -26,6 +26,8 @@ jobs:
 
       - name: Run absen
         env:
+          SIELKA_PASSWORD:  ${{ secrets.SIELKA_PASSWORD }}
+          SIELKA_DEVICE_ID: ${{ secrets.SIELKA_DEVICE_ID }}
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           ABSEN_MODE: ${{ secrets.ABSEN_MODE }}
