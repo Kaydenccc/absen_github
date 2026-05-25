@@ -26,6 +26,8 @@ jobs:
 
       - name: Run absen
         env:
+          CF_WORKER_URL:    ${{ secrets.CF_WORKER_URL }}
+          CF_RELAY_SECRET:  ${{ secrets.CF_RELAY_SECRET }}
           SIELKA_PASSWORD:  ${{ secrets.SIELKA_PASSWORD }}
           SIELKA_DEVICE_ID: ${{ secrets.SIELKA_DEVICE_ID }}
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
