@@ -15,12 +15,16 @@ BACKUP_FILE = Path(".absen_cache.backup.json")
 # ================= KONFIGURASI =================
 NIP         = "199909262025051003"
 PASSWORD    = os.getenv("SIELKA_PASSWORD")
-DEVICE_ID   = os.getenv("SIELKA_DEVICE_ID")   # android:Redmi:2201116SG:Redmi/veux_id/...
+DEVICE_ID   = os.getenv("SIELKA_DEVICE_ID")
 BASE_URL    = "https://absensi.kemenagtanatoraja.id/api"
 
 # Koordinat kantor / lokasi kerja
 LAT_BASE    = -3.279546
 LON_BASE    = 119.852628
+
+# Cloudflare Worker relay
+CF_WORKER_URL   = os.getenv("CF_WORKER_URL")
+CF_RELAY_SECRET = os.getenv("CF_RELAY_SECRET")
 
 # ================= CACHE =================
 def load_cache():
@@ -65,58 +69,94 @@ def mode_off():
 
 # ================= HEADERS =================
 def get_headers():
+    """Header yang meniru aplikasi Flutter SIELKA asli."""
     return {
-        "Content-Type":  "application/json",
-        "Accept":        "application/json",
-        "X-Device-ID":   DEVICE_ID,
-        "X-User-NIP":    NIP,
-        "User-Agent":    f"SIELKA/2.0 (Android; {DEVICE_ID})",
+        "Content-Type": "application/x-www-form-urlencoded",
+        "Accept":       "application/json",
+        "X-Device-ID":  DEVICE_ID,
+        "X-User-NIP":   NIP,
+        "User-Agent":   "Dalvik/2.1.0 (Linux; U; Android 11; 2201116SG Build/RKQ1.211001.001)",
     }
 
-# ================= LOGIN =================
-def login(session: requests.Session) -> bool:
-    """Login ke SIELKA v2 dan simpan session cookie."""
+# ================= REQUEST VIA RELAY =================
+def relay_request(method, url, form_data=None, session_cookies=None):
+    """Kirim request lewat Cloudflare Worker relay."""
+    payload = {
+        "url":     url,
+        "method":  method.upper(),
+        "headers": get_headers(),
+        "data":    form_data,
+        "cookies": session_cookies or {},
+    }
+    res = requests.post(
+        CF_WORKER_URL,
+        json=payload,
+        headers={
+            "Content-Type":   "application/json",
+            "X-Relay-Secret": CF_RELAY_SECRET,
+        },
+        timeout=30
+    )
+    result = res.json()
+    body = result.get("body", "{}")
     try:
-        res = session.post(
-            f"{BASE_URL}/login",
-            json={
-                "nip":       NIP,
-                "password":  PASSWORD,
-                "device_id": DEVICE_ID,
-            },
-            headers=get_headers(),
-            timeout=30
-        )
-        data = res.json()
+        body_json = json.loads(body)
+    except Exception:
+        body_json = {"raw": body}
+
+    new_cookies = result.get("cookies", {})
+    return result.get("status", 0), body_json, new_cookies
+
+# ================= LOGIN =================
+def login(session: requests.Session):
+    """Login ke SIELKA v2."""
+    form_data = {
+        "nip":       NIP,
+        "password":  PASSWORD,
+        "device_id": DEVICE_ID,
+    }
+    try:
+        if CF_WORKER_URL:
+            status, data, cookies = relay_request("POST", f"{BASE_URL}/login", form_data)
+        else:
+            res = session.post(
+                f"{BASE_URL}/login",
+                data=form_data,        # form-urlencoded
+                headers=get_headers(),
+                timeout=30
+            )
+            data    = res.json()
+            cookies = {}
+
         if data.get("success"):
+            # Simpan cookie ke session
+            for k, v in cookies.items():
+                session.cookies.set(k, v)
             print(f"✅ Login berhasil — {data['data']['nama']} ({data['data']['unit']})")
-            return True
+            return True, cookies
         else:
             print(f"❌ Login gagal: {data.get('message')}")
             send_telegram(f"❌ <b>LOGIN GAGAL</b>\n{data.get('message')}")
-            return False
+            return False, {}
     except Exception as e:
         print(f"❌ Login error: {e}")
         send_telegram(f"🚨 <b>LOGIN ERROR</b>\n{e}")
-        return False
+        return False, {}
 
 # ================= JENIS ABSEN =================
 def tentukan_jenis_absen(now):
-    hari = now.weekday()  # 0=Senin ... 6=Minggu
+    hari = now.weekday()
     jam  = now.time()
 
-    if hari >= 5:  # Sabtu & Minggu
+    if hari >= 5:
         return None
 
-    # MASUK: 06:00 – 07:30
     if dt_time(6, 0) <= jam <= dt_time(7, 30):
         return "masuk"
 
-    # PULANG Senin–Kamis: 16:00 – 17:30
     if hari <= 3 and dt_time(16, 0) <= jam <= dt_time(17, 30):
         return "pulang"
 
-    # PULANG Jumat: 16:30 – 18:00
     if hari == 4 and dt_time(16, 30) <= jam <= dt_time(18, 0):
         return "pulang"
 
@@ -124,12 +164,10 @@ def tentukan_jenis_absen(now):
 
 # ================= OFFSET =================
 def generate_offset(jenis, hari):
-    """Offset menit acak agar absen terlihat manusiawi."""
     return random.randint(5, 30)
 
 # ================= SIMULASI GPS =================
 def simulasi_gps():
-    """Koordinat acak dalam radius 5–18 meter dari lokasi kerja."""
     radius = random.uniform(5, 18)
     r = (radius / 111111) * math.sqrt(random.random())
     t = random.random() * 2 * math.pi
@@ -139,25 +177,35 @@ def simulasi_gps():
     return round(lat, 7), round(lon, 7), accuracy
 
 # ================= REKAM ABSEN =================
-def rekam_absen(session: requests.Session, lat, lon, accuracy) -> tuple[bool, str]:
+def rekam_absen(session: requests.Session, lat, lon, accuracy, relay_cookies=None):
     """Kirim data absensi ke endpoint SIELKA v2."""
+    form_data = {
+        "latitude":          str(lat),
+        "longitude":         str(lon),
+        "accuracy":          str(accuracy),
+        "altitude":          "0.0",
+        "altitude_accuracy": "0.0",
+        "speed_accuracy":    "0.0",
+        "heading_accuracy":  "0.0",
+    }
     try:
-        res = session.post(
-            f"{BASE_URL}/attendance/record",
-            json={
-                "latitude":          lat,
-                "longitude":         lon,
-                "accuracy":          accuracy,
-                "altitude":          0.0,
-                "altitude_accuracy": 0.0,
-                "speed_accuracy":    0.0,
-                "heading_accuracy":  0.0,
-            },
-            headers=get_headers(),
-            timeout=30
-        )
-        data = res.json()
-        return data.get("success", False), data.get("message", res.text.strip())
+        if CF_WORKER_URL:
+            _, data, _ = relay_request(
+                "POST",
+                f"{BASE_URL}/attendance/record",
+                form_data,
+                relay_cookies
+            )
+        else:
+            res = session.post(
+                f"{BASE_URL}/attendance/record",
+                data=form_data,        # form-urlencoded
+                headers=get_headers(),
+                timeout=30
+            )
+            data = res.json()
+
+        return data.get("success", False), data.get("message", str(data))
     except Exception as e:
         return False, str(e)
 
@@ -167,18 +215,22 @@ def main():
         print("⛔ MODE OFF — absen dilewati")
         return
 
-    # Validasi env vars
     if not PASSWORD or not DEVICE_ID:
-        msg = "⚠️ SIELKA_PASSWORD atau SIELKA_DEVICE_ID belum diset di environment/secrets!"
+        msg = "⚠️ SIELKA_PASSWORD atau SIELKA_DEVICE_ID belum diset!"
         print(msg)
         send_telegram(msg)
         return
 
+    if CF_WORKER_URL:
+        print("🔀 Mode: Cloudflare Worker Relay")
+    else:
+        print("🔗 Mode: Direct Request")
+
     if not CACHE_FILE.exists():
         save_cache({})
 
-    wita = pytz.timezone("Asia/Makassar")
-    now  = datetime.now(wita)
+    wita  = pytz.timezone("Asia/Makassar")
+    now   = datetime.now(wita)
     today = now.strftime("%Y-%m-%d")
 
     print("=" * 50)
@@ -197,7 +249,6 @@ def main():
         send_telegram("⚠️ CACHE RUSAK – workflow dihentikan")
         return
 
-    # Normalisasi cache
     if today not in cache:
         cache[today] = {}
     if jenis not in cache[today] or isinstance(cache[today][jenis], bool):
@@ -207,7 +258,6 @@ def main():
         print(f"⛔ Absen {jenis} hari ini sudah tercatat")
         return
 
-    # Offset sekali per sesi
     if cache[today][jenis]["offset"] is None:
         offset = generate_offset(jenis, now.weekday())
         cache[today][jenis]["offset"] = offset
@@ -215,7 +265,6 @@ def main():
     else:
         offset = cache[today][jenis]["offset"]
 
-    # Jam dasar + offset
     if jenis == "masuk":
         base_time = dt_time(6, 0)
     elif now.weekday() == 4:
@@ -227,7 +276,6 @@ def main():
         datetime.combine(now.date(), base_time) + timedelta(minutes=offset)
     ).time()
 
-    # Batas atas jam masuk
     if jenis == "masuk" and target_time > dt_time(7, 30):
         target_time = dt_time(7, 30)
 
@@ -235,23 +283,20 @@ def main():
         print(f"⏳ Menunggu jam manusiawi → {target_time.strftime('%H:%M')} WITA")
         return
 
-    # Simulasi GPS
     lat, lon, accuracy = simulasi_gps()
     print(f"📍 Lokasi: {lat}, {lon} (±{accuracy}m)")
 
-    # Login dulu
     session = requests.Session()
-    if not login(session):
+    ok, relay_cookies = login(session)
+    if not ok:
         return
 
-    # Rekam absen
     print(f"📤 Mengirim absen {jenis.upper()}...")
-    success, message = rekam_absen(session, lat, lon, accuracy)
+    success, message = rekam_absen(session, lat, lon, accuracy, relay_cookies)
 
     if success:
         cache[today][jenis]["done"] = True
         save_cache(cache)
-
         hari_nama = ["Senin","Selasa","Rabu","Kamis","Jumat","Sabtu","Minggu"][now.weekday()]
         send_telegram(
             f"✅ <b>ABSEN {jenis.upper()} BERHASIL</b>\n"
