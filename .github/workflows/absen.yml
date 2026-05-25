@@ -33,7 +33,7 @@ jobs:
           SIELKA_DEVICE_ID: ${{ secrets.SIELKA_DEVICE_ID }}
           TELEGRAM_TOKEN:   ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          ABSEN_MODE:       ${{ vars.ABSEN_MODE }}
+          ABSEN_MODE:       ${{ secrets.ABSEN_MODE }}
         run: python absen_github.py
       - name: Commit cache
         run: |
