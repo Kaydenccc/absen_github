@@ -725,7 +725,7 @@
   },
   "2026-06-02": {
     "masuk": {
-      "done": false,
+      "done": true,
       "offset": 26
     }
   }
