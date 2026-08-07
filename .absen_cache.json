@@ -182,5 +182,11 @@
       "done": true,
       "offset": 20
     }
+  },
+  "2026-08-07": {
+    "pulang": {
+      "done": false,
+      "offset": 30
+    }
   }
 }
